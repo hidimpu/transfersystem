@@ -72,14 +72,6 @@ go run cmd/main.go
 
 ---
 
-## 🧪 Running Unit Tests
-
-```bash
-go test ./...
-```
-
----
-
 ## 📥 Create Required Tables
 
 ```sql
