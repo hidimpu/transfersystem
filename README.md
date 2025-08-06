@@ -80,6 +80,25 @@ go test ./...
 
 ---
 
+## 📥 Create Required Tables
+
+```sql
+CREATE TABLE IF NOT EXISTS accounts (
+    id BIGINT PRIMARY KEY,
+    balance NUMERIC(20, 8) NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+    id SERIAL PRIMARY KEY,
+    source_account_id BIGINT NOT NULL,
+    destination_account_id BIGINT NOT NULL,
+    amount NUMERIC(20, 8) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (source_account_id) REFERENCES accounts(id),
+    FOREIGN KEY (destination_account_id) REFERENCES accounts(id)
+);
+```
+
 ## 📥 Sample Data Insert Query
 
 ```sql
