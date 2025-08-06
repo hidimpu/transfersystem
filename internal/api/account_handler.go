@@ -1,108 +1,113 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
-	"transfersystem/internal/model"
-
 	"github.com/go-chi/chi/v5"
+	"github.com/hidimpu/transfersystem/internal/model"
+	"github.com/shopspring/decimal"
 )
 
-type DB interface {
-	CreateAccount(*model.Account) error
-	GetAccount(id int) (*model.Account, error)
-	ProcessTransaction(*model.Transaction) error
-}
-
-type Handler struct {
-	DB DB
-}
-
-func NewHandler(db DB) *Handler {
-	return &Handler{DB: db}
-}
-
-func respondError(w http.ResponseWriter, status int, msg string) {
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
-func HandleJSONDecode(err error, w http.ResponseWriter) bool {
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid JSON")
-		return true
-	}
-	return false
-}
-
-func (h *Handler) HandleAccounts(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		respondError(w, http.StatusMethodNotAllowed, "only POST allowed")
-		return
-	}
-
-	var acc model.Account
-	if HandleJSONDecode(json.NewDecoder(r.Body).Decode(&acc), w) {
-		return
-	}
-
-	if acc.AccountID <= 0 || acc.InitialBalance < 0 {
-		respondError(w, http.StatusBadRequest, "invalid account input")
-		return
-	}
-
-	if err := h.DB.CreateAccount(&acc); err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *Handler) HandleGetAccount(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "account_id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
-		respondError(w, http.StatusBadRequest, "invalid account ID")
-		return
-	}
-
-	acc, err := h.DB.GetAccount(id)
-	if err != nil {
-		respondError(w, http.StatusNotFound, "account not found")
-		return
-	}
-
-	json.NewEncoder(w).Encode(acc)
-}
-
-func (h *Handler) HandleTransactions(w http.ResponseWriter, r *http.Request) {
-	var tx model.Transaction
-	if HandleJSONDecode(json.NewDecoder(r.Body).Decode(&tx), w) {
-		return
-	}
-
-	if tx.SourceAccountID <= 0 || tx.DestinationAccountID <= 0 || tx.Amount <= 0 {
-		respondError(w, http.StatusBadRequest, "invalid transaction input")
-		return
-	}
-
-	if tx.SourceAccountID == tx.DestinationAccountID {
-		respondError(w, http.StatusUnprocessableEntity, "source and destination must differ")
-		return
-	}
-
-	if err := h.DB.ProcessTransaction(&tx); err != nil {
-		if errors.Is(err, model.ErrInsufficientBalance) {
-			respondError(w, http.StatusConflict, err.Error())
+func CreateAccountHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var acc model.Account
+		if err := json.NewDecoder(r.Body).Decode(&acc); err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
-		respondError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
 
-	w.WriteHeader(http.StatusOK)
+		if acc.ID == 0 || acc.Balance.IsNegative() {
+			http.Error(w, "Invalid account details", http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.Exec("INSERT INTO accounts (id, balance) VALUES ($1, $2)", acc.ID, acc.Balance)
+		if err != nil {
+			http.Error(w, "Failed to create account", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	}
+}
+
+func GetAccountHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		accountIDStr := chi.URLParam(r, "account_id")
+		accountID, err := strconv.ParseInt(accountIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid account ID", http.StatusBadRequest)
+			return
+		}
+
+		row := db.QueryRow("SELECT id, balance FROM accounts WHERE id = $1", accountID)
+		var acc model.Account
+		if err := row.Scan(&acc.ID, &acc.Balance); err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "Account not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, "Failed to retrieve account", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(acc)
+	}
+}
+
+func CreateTransactionHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var txReq model.Transaction
+		if err := json.NewDecoder(r.Body).Decode(&txReq); err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+		if txReq.SourceAccountID == 0 || txReq.DestinationAccountID == 0 || txReq.Amount.LessThanOrEqual(decimal.Zero) {
+			http.Error(w, "Invalid transaction data", http.StatusBadRequest)
+			return
+		}
+
+		txReq.Amount = txReq.Amount.Round(2)
+
+		tx, err := db.Begin()
+		if err != nil {
+			http.Error(w, "Failed to begin transaction", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		// Deduct from source
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE id = $2`, txReq.Amount, txReq.SourceAccountID)
+		if err != nil {
+			http.Error(w, "Failed to debit source account", http.StatusInternalServerError)
+			return
+		}
+
+		// Add to destination
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance + $1 WHERE id = $2`, txReq.Amount, txReq.DestinationAccountID)
+		if err != nil {
+			http.Error(w, "Failed to credit destination account", http.StatusInternalServerError)
+			return
+		}
+
+		// Record transaction
+		_, err = tx.Exec(`INSERT INTO transactions (source_account_id, destination_account_id, amount) VALUES ($1, $2, $3)`,
+			txReq.SourceAccountID, txReq.DestinationAccountID, txReq.Amount)
+		if err != nil {
+			http.Error(w, "Failed to record transaction", http.StatusInternalServerError)
+			return
+		}
+
+		if err = tx.Commit(); err != nil {
+			http.Error(w, "Transaction commit failed", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	}
 }

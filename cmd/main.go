@@ -1,57 +1,43 @@
 package main
 
 import (
-	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
 
-	"transfersystem/internal/api"
-	"transfersystem/internal/config"
-	"transfersystem/internal/db"
+	"github.com/hidimpu/transfersystem/internal/api"
+	"github.com/hidimpu/transfersystem/internal/db"
 )
 
 func main() {
-	_ = godotenv.Load(".env")
-	cfg := config.LoadConfig()
-	dbConn := db.NewPostgresDB(cfg)
-	handler := api.NewHandler(dbConn)
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using environment variables")
+	}
+
+	dbConn, err := db.InitDB()
+	if err != nil {
+		log.Fatal("Failed to connect to DB:", err)
+	}
+	defer dbConn.Close()
 
 	r := chi.NewRouter()
-	r.Post("/accounts", handler.HandleAccounts)
-	r.Get("/accounts/{account_id}", handler.HandleGetAccount)
-	r.Post("/transactions", handler.HandleTransactions)
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK"))
+
+	r.Route("/accounts", func(r chi.Router) {
+		r.Post("/", api.CreateAccountHandler(dbConn))
+		r.Get("/{account_id}", api.GetAccountHandler(dbConn))
 	})
 
-	server := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: r,
+	r.Post("/transactions", api.CreateTransactionHandler(dbConn))
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	go func() {
-		log.Printf("Server started on port %s", cfg.Port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Graceful shutdown failed: %v", err)
-	}
-	log.Println("Server exited properly")
+	fmt.Println("Server started on port:", port)
+	http.ListenAndServe(":"+port, r)
 }
