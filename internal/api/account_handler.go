@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/hidimpu/transfersystem/internal/model"
+	"transfersystem/internal/model"
 
 	"github.com/go-chi/chi/v5"
 )

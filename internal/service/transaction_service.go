@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/hidimpu/transfersystem/internal/repository"
+	"transfersystem/internal/repository"
 
 	"github.com/shopspring/decimal"
 )
