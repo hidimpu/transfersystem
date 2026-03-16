@@ -112,7 +112,7 @@ commands are similar but environment-variable syntax differs slightly.
 ### 4.1 Clone the repository
 
 ```bash
-git clone <your-public-repo-url>.git
+git clone https://github.com/hidimpu/tsystem.git
 cd transfersystem
 ```
 
