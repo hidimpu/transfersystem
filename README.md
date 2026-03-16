@@ -73,7 +73,7 @@ If any step fails, the transaction is rolled back and an appropriate typed
 You will need:
 
 - Go **1.21+**
-- PostgreSQL **13+** (local or via Docker)
+- PostgreSQL **13+**
 - Git
 - `curl` (for manual testing)
 - `psql` (PostgreSQL client) is recommended but optional
@@ -120,35 +120,24 @@ The directory should contain `cmd/`, `internal/`, `README.md`, `INSTRUCTIONS.md`
 
 ### 4.2 Start PostgreSQL
 
-You can run Postgres via Docker (recommended) or natively.
+Ensure a PostgreSQL instance is running and reachable via the connection string you plan to use.
 
-#### Option A: PostgreSQL via Docker (recommended)
+For example, on macOS with Homebrew:
 
 ```bash
-docker run \
-  --name transfersystem-postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=transfersystem \
-  -p 5432:5432 \
-  -d postgres:16
+brew install postgresql@16
+brew services start postgresql@16
 ```
 
-This starts a Postgres instance on `localhost:5432` with:
+On Linux distributions you can use the native package manager (e.g. `sudo apt install postgresql`).
 
-- user: `postgres`
-- password: `postgres`
-- database: `transfersystem`
-
-#### Option B: Native PostgreSQL
-
-Install using your OS package manager (e.g. `brew install postgresql@16` on
-macOS, or `sudo apt install postgresql` on Ubuntu), then create the DB:
+Once the server is up, create the exercise database (adjust the command if you use a different superuser):
 
 ```bash
 createdb transfersystem
 ```
 
-If needed, create or ensure a `postgres` superuser exists.
+If needed, create or ensure a `postgres` superuser exists so the connection string in later steps works unchanged.
 
 ### 4.3 Apply the schema
 
@@ -195,10 +184,10 @@ The service reads configuration from environment variables (or a `.env` file):
 - `DB_URL` – PostgreSQL connection string
 - `PORT`   – HTTP port to listen on (defaults to 8080 if unset)
 
-Create a `.env` file in the root:
+Create a `.env` file in the root if you prefer not to export variables manually:
 
 ```bash
-cat > .env << 'EOF'
+cat > .env <<'EOF'
 DB_URL=postgres://postgres:postgres@localhost:5432/transfersystem?sslmode=disable
 PORT=8080
 EOF
@@ -206,16 +195,14 @@ EOF
 
 `cmd/main.go` uses `godotenv` to load `.env` automatically on startup.
 
-Alternatively, you can export these in your shell instead of using `.env`:
+Alternatively, export the variables in your shell:
 
 ```bash
 export DB_URL="postgres://postgres:postgres@localhost:5432/transfersystem?sslmode=disable"
 export PORT=8080
 ```
 
-> **Note**: `internal/db/postgres.go` now validates that `DB_URL` is set and
-> performs a `Ping` on startup. If the DB URL is wrong or Postgres is not
-> reachable, the application will fail fast with a clear error.
+`internal/db/postgres.go` validates that `DB_URL` is set and issues an initial `Ping`. If the database is unreachable the process exits with a clear error message.
 
 ### 4.5 Run unit tests
 
@@ -250,10 +237,10 @@ Expected startup logs:
 
 ```text
 DB Connection Established!
-🚀 Server started on port: 8080
-📊 Database locks: FOR UPDATE with Serializable isolation
-🏗️  Architecture: MVC with proper separation of concerns
-🔒 Concurrency: Row-level locking with atomic transactions
+Server started on port: 8080
+Database locks: FOR UPDATE with Serializable isolation
+Architecture: MVC with proper separation of concerns
+Concurrency: Row-level locking with atomic transactions
 ```
 
 If the server exits immediately with an error, check that:

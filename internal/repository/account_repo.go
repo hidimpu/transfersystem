@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/hidimpu/transfersystem/internal/model"
 
@@ -31,7 +32,7 @@ func (r *AccountRepository) GetByID(ctx context.Context, id int64) (*model.Accou
 	err := r.db.QueryRowContext(ctx, `SELECT account_id, balance FROM accounts WHERE account_id=$1`, id).
 		Scan(&acc.ID, &balanceStr)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, model.ErrAccountNotFound
 		}
 		return nil, err
@@ -39,7 +40,7 @@ func (r *AccountRepository) GetByID(ctx context.Context, id int64) (*model.Accou
 
 	balance, convErr := decimal.NewFromString(balanceStr)
 	if convErr != nil {
-		return nil, convErr
+		return nil, model.ErrFailedGetAccount
 	}
 	acc.Balance = balance
 
@@ -54,7 +55,7 @@ func (r *AccountRepository) GetByIDWithLock(ctx context.Context, id int64, tx *s
 	err := tx.QueryRowContext(ctx, `SELECT account_id, balance FROM accounts WHERE account_id=$1 FOR UPDATE`, id).
 		Scan(&acc.ID, &balanceStr)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, model.ErrAccountNotFound
 		}
 		return nil, err
@@ -62,7 +63,7 @@ func (r *AccountRepository) GetByIDWithLock(ctx context.Context, id int64, tx *s
 
 	balance, convErr := decimal.NewFromString(balanceStr)
 	if convErr != nil {
-		return nil, convErr
+		return nil, model.ErrFailedGetAccount
 	}
 	acc.Balance = balance
 
@@ -84,7 +85,7 @@ func (r *AccountRepository) UpdateBalanceTx(ctx context.Context, id int64, diff 
 	}
 
 	// Update the balance
-	_, err = tx.ExecContext(ctx, `UPDATE accounts SET balance=$1 WHERE account_id=$2`, newBalance, id)
+	_, err = tx.ExecContext(ctx, `UPDATE accounts SET balance = balance + $1 WHERE account_id=$2`, diff, id)
 	return err
 }
 
@@ -103,8 +104,13 @@ func (r *AccountRepository) GetAll(ctx context.Context) ([]*model.Account, error
 		if err := rows.Scan(&acc.ID, &balanceStr); err != nil {
 			return nil, err
 		}
-		acc.Balance, _ = decimal.NewFromString(balanceStr)
+		balance, convErr := decimal.NewFromString(balanceStr)
+		if convErr != nil {
+			return nil, model.ErrFailedGetAccount
+		}
+		acc.Balance = balance
 		accounts = append(accounts, &acc)
+
 	}
 	return accounts, nil
 }
@@ -121,7 +127,7 @@ func (r *AccountRepository) GetBalance(ctx context.Context, id int64) (decimal.D
 	var balanceStr string
 	err := r.db.QueryRowContext(ctx, `SELECT balance FROM accounts WHERE account_id=$1`, id).Scan(&balanceStr)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return decimal.Zero, model.ErrAccountNotFound
 		}
 		return decimal.Zero, err
@@ -129,7 +135,7 @@ func (r *AccountRepository) GetBalance(ctx context.Context, id int64) (decimal.D
 
 	balance, convErr := decimal.NewFromString(balanceStr)
 	if convErr != nil {
-		return decimal.Zero, convErr
+		return decimal.Zero, model.ErrFailedGetAccount
 	}
 	return balance, nil
 }

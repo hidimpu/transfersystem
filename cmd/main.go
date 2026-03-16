@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -24,7 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to DB:", err)
 	}
-	log.Println("DB Connection Established!")
+	log.Println("database connection established")
 	defer dbConn.Close()
 
 	// Initialize repositories (Data Access Layer)
@@ -57,10 +56,10 @@ func main() {
 		port = "8080"
 	}
 
-	fmt.Printf("🚀 Server started on port: %s\n", port)
-	fmt.Println("📊 Database locks: FOR UPDATE with Serializable isolation")
-	fmt.Println("🏗️  Architecture: MVC with proper separation of concerns")
-	fmt.Println("🔒 Concurrency: Row-level locking with atomic transactions")
+	log.Printf("server listening on port %s", port)
+	log.Println("database locks: FOR UPDATE with SERIALIZABLE isolation")
+	log.Println("architecture: MVC with clear separation of concerns")
+	log.Println("concurrency: row-level locking with atomic transactions")
 
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("HTTP server failed: %v", err)
