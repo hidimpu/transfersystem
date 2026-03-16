@@ -96,7 +96,6 @@ transfersystem/
 │   ├── service/                 # Business logic services
 │   └── utils/                   # Logger and shared utilities
 ├── internal/db/schema.sql       # Database schema
-├── INSTRUCTIONS.md              # Extended setup + test instructions
 ├── README.md                    # (this file)
 ├── go.mod
 └── go.sum
@@ -116,7 +115,7 @@ git clone https://github.com/hidimpu/tsystem.git
 cd transfersystem
 ```
 
-The directory should contain `cmd/`, `internal/`, `README.md`, `INSTRUCTIONS.md`.
+The directory should contain `cmd/`, `internal/`, `README.md`.
 
 ### 4.2 Start PostgreSQL
 
