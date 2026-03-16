@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
+
+	"github.com/lib/pq"
 
 	"github.com/hidimpu/transfersystem/internal/model"
 	"github.com/hidimpu/transfersystem/internal/repository"
@@ -45,17 +45,15 @@ func (s *accountService) CreateAccount(ctx context.Context, account *model.Accou
 
 	err := s.accountRepo.Create(ctx, account)
 	if err != nil {
-		// Handle duplicate key error more robustly by looking for the standard
-		// Postgres duplicate key indicator, rather than relying on an exact string
-		// match. This avoids coupling to a specific constraint name.
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			s.logger.LogWarning("ACCOUNT_CREATE", fmt.Sprintf("Account %d already exists", account.ID))
+			return model.ErrAccountExists
+		}
+
 		if errors.Is(err, model.ErrAccountExists) {
 			s.logger.LogWarning("ACCOUNT_CREATE", fmt.Sprintf("Account %d already exists", account.ID))
-			return model.ErrAccountExists.WithContext(fmt.Sprintf("account with ID %d already exists", account.ID))
-		}
-		// Fallback: if repository does not wrap the error, inspect the message.
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-			s.logger.LogWarning("ACCOUNT_CREATE", fmt.Sprintf("Account %d already exists", account.ID))
-			return model.ErrAccountExists.WithContext(fmt.Sprintf("account with ID %d already exists", account.ID))
+			return model.ErrAccountExists
 		}
 
 		s.logger.LogError("ACCOUNT_CREATE", "CREATE_ERROR", fmt.Sprintf("Failed to create account %d", account.ID), err)
@@ -80,11 +78,6 @@ func (s *accountService) GetAccountByID(ctx context.Context, id int64) (*model.A
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, model.ErrAccountNotFound) {
-			s.logger.LogWarning("ACCOUNT_GET", fmt.Sprintf("Account not found: %d", id))
-			return nil, model.ErrAccountNotFound
-		}
-		// Fallback: repository may return raw sql.ErrNoRows
-		if errors.Is(err, sql.ErrNoRows) {
 			s.logger.LogWarning("ACCOUNT_GET", fmt.Sprintf("Account not found: %d", id))
 			return nil, model.ErrAccountNotFound
 		}

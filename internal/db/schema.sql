@@ -1,7 +1,7 @@
 -- Create accounts table
 CREATE TABLE IF NOT EXISTS accounts (
     account_id BIGINT PRIMARY KEY,
-    balance DECIMAL(15,2) NOT NULL DEFAULT 0.00
+    balance DECIMAL(20,5) NOT NULL DEFAULT 0.00000
 );
 
 -- Create transactions table
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     id BIGSERIAL PRIMARY KEY,
     source_account_id BIGINT NOT NULL,
     destination_account_id BIGINT NOT NULL,
-    amount DECIMAL(15,2) NOT NULL,
+    amount DECIMAL(20,5) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (source_account_id) REFERENCES accounts(account_id),
     FOREIGN KEY (destination_account_id) REFERENCES accounts(account_id)

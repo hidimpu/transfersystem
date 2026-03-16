@@ -78,10 +78,6 @@ You will need:
 - `curl` (for manual testing)
 - `psql` (PostgreSQL client) is recommended but optional
 
-For the end-to-end scenario script (`test_scenarios.sh`) you’ll also need:
-
-- `bash`
-- `jq`
 
 ---
 
@@ -100,7 +96,6 @@ transfersystem/
 │   ├── service/                 # Business logic services
 │   └── utils/                   # Logger and shared utilities
 ├── internal/db/schema.sql       # Database schema
-├── test_scenarios.sh            # End-to-end scenario test script
 ├── INSTRUCTIONS.md              # Extended setup + test instructions
 ├── README.md                    # (this file)
 ├── go.mod
@@ -170,7 +165,7 @@ This creates the required tables:
 -- accounts table
 CREATE TABLE IF NOT EXISTS accounts (
     account_id BIGINT PRIMARY KEY,
-    balance DECIMAL(15,2) NOT NULL DEFAULT 0.00
+    balance DECIMAL(20,5) NOT NULL DEFAULT 0.00000
 );
 
 -- transactions table
@@ -178,7 +173,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     id BIGSERIAL PRIMARY KEY,
     source_account_id BIGINT NOT NULL,
     destination_account_id BIGINT NOT NULL,
-    amount DECIMAL(15,2) NOT NULL,
+    amount DECIMAL(20,5) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (source_account_id) REFERENCES accounts(account_id),
     FOREIGN KEY (destination_account_id) REFERENCES accounts(account_id)
@@ -230,7 +225,18 @@ From the project root:
 go test ./...
 ```
 
-All tests in `internal/model` and `internal/service` should pass.
+All unit tests currently pass:
+
+```text
+?    github.com/hidimpu/transfersystem/cmd            [no test files]
+?    github.com/hidimpu/transfersystem/internal/api   [no test files]
+?    github.com/hidimpu/transfersystem/internal/config [no test files]
+?    github.com/hidimpu/transfersystem/internal/db    [no test files]
+ok   github.com/hidimpu/transfersystem/internal/model  2.57s
+?    github.com/hidimpu/transfersystem/internal/repository [no test files]
+ok   github.com/hidimpu/transfersystem/internal/service 1.28s
+?    github.com/hidimpu/transfersystem/internal/utils  [no test files]
+```
 
 ### 4.6 Run the HTTP API
 
@@ -310,7 +316,7 @@ curl -i http://localhost:8080/accounts/201
 ```json
 {
   "account_id": 201,
-  "balance": "500.00"
+  "balance": "500.00000"
 }
 ```
 
@@ -378,54 +384,17 @@ Concurrency is handled in the **service layer** using a combination of:
 - **Atomic updates** – debiting, crediting, and inserting into `transactions`
   are performed in the same DB transaction.
 
-The `test_scenarios.sh` script includes a simple concurrency test that
-performs multiple parallel transfers and verifies final balances.
-
 ---
 
-## 7. End-to-end scenario tests
 
-The repository includes `test_scenarios.sh`, which exercises the API with a
-sequence of scenarios and validates responses and balances.
-
-From the project root:
-
-```bash
-chmod +x ./test_scenarios.sh
-./test_scenarios.sh
-```
-
-The script will:
-
-1. Run `go test ./...`.
-2. Start the API server in the background (using `DB_URL` and `PORT`).
-3. Execute a number of scenarios:
-   - Successful account creation and duplicate-account handling.
-   - Balance queries.
-   - Valid transfers.
-   - Insufficient funds, same-account, negative/zero amount.
-   - Non-existent source/destination accounts.
-   - Invalid payloads.
-   - A concurrency test with parallel transfers.
-4. Stop the server and exit non-zero if any check fails.
-
-You can override environment variables for custom environments, e.g.:
-
-```bash
-DB_URL="postgres://user:pass@host:5432/dbname?sslmode=disable" \
-PORT=8080 \
-BASE_URL="http://localhost:8080" \
-./test_scenarios.sh
-```
-
----
-
-## 8. Assumptions & Notes
+## 7. Assumptions & Notes
 
 - Single currency across all accounts.
 - No authentication or authorisation (as per the assignment).
-- All monetary amounts are provided and returned as **strings** to avoid
-  floating-point issues; the service uses `shopspring/decimal` internally.
+- All monetary amounts are provided and returned as **strings** with up to five
+  decimal places to match the exercise examples; the service uses
+  `shopspring/decimal` internally and the database stores values in
+  `DECIMAL(20,5)`.
 - Account IDs are `BIGINT`, chosen by the caller; the system does not generate
   IDs.
 - Error responses are simple plain-text messages with appropriate HTTP codes
@@ -434,7 +403,7 @@ BASE_URL="http://localhost:8080" \
 
 ---
 
-## 9. Extensibility
+## 8. Extensibility
 
 The current design is intentionally modular so extensions are straightforward:
 

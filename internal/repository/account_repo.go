@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/hidimpu/transfersystem/internal/model"
 
@@ -28,14 +27,22 @@ func (r *AccountRepository) Create(ctx context.Context, acc *model.Account) erro
 func (r *AccountRepository) GetByID(ctx context.Context, id int64) (*model.Account, error) {
 	var acc model.Account
 	var balanceStr string
-	err := r.db.QueryRowContext(ctx, `SELECT account_id, balance FROM accounts WHERE account_id=$1`, id).Scan(&acc.ID, &balanceStr)
+
+	err := r.db.QueryRowContext(ctx, `SELECT account_id, balance FROM accounts WHERE account_id=$1`, id).
+		Scan(&acc.ID, &balanceStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("account not found")
+			return nil, model.ErrAccountNotFound
 		}
 		return nil, err
 	}
-	acc.Balance, _ = decimal.NewFromString(balanceStr)
+
+	balance, convErr := decimal.NewFromString(balanceStr)
+	if convErr != nil {
+		return nil, convErr
+	}
+	acc.Balance = balance
+
 	return &acc, nil
 }
 
@@ -43,14 +50,22 @@ func (r *AccountRepository) GetByID(ctx context.Context, id int64) (*model.Accou
 func (r *AccountRepository) GetByIDWithLock(ctx context.Context, id int64, tx *sql.Tx) (*model.Account, error) {
 	var acc model.Account
 	var balanceStr string
-	err := tx.QueryRowContext(ctx, `SELECT account_id, balance FROM accounts WHERE account_id=$1 FOR UPDATE`, id).Scan(&acc.ID, &balanceStr)
+
+	err := tx.QueryRowContext(ctx, `SELECT account_id, balance FROM accounts WHERE account_id=$1 FOR UPDATE`, id).
+		Scan(&acc.ID, &balanceStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("account not found")
+			return nil, model.ErrAccountNotFound
 		}
 		return nil, err
 	}
-	acc.Balance, _ = decimal.NewFromString(balanceStr)
+
+	balance, convErr := decimal.NewFromString(balanceStr)
+	if convErr != nil {
+		return nil, convErr
+	}
+	acc.Balance = balance
+
 	return &acc, nil
 }
 
@@ -65,7 +80,7 @@ func (r *AccountRepository) UpdateBalanceTx(ctx context.Context, id int64, diff 
 	// Calculate new balance
 	newBalance := account.Balance.Add(diff)
 	if newBalance.IsNegative() {
-		return fmt.Errorf("insufficient funds")
+		return model.ErrInsufficientFunds
 	}
 
 	// Update the balance
@@ -107,9 +122,14 @@ func (r *AccountRepository) GetBalance(ctx context.Context, id int64) (decimal.D
 	err := r.db.QueryRowContext(ctx, `SELECT balance FROM accounts WHERE account_id=$1`, id).Scan(&balanceStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return decimal.Zero, fmt.Errorf("account not found")
+			return decimal.Zero, model.ErrAccountNotFound
 		}
 		return decimal.Zero, err
 	}
-	return decimal.NewFromString(balanceStr)
+
+	balance, convErr := decimal.NewFromString(balanceStr)
+	if convErr != nil {
+		return decimal.Zero, convErr
+	}
+	return balance, nil
 }

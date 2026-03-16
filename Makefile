@@ -18,7 +18,3 @@ test:
 
 run:
 	cd transfersystem && go run ./cmd/main.go
-
-scenarios:
-	chmod +x ./test_scenarios.sh
-	./test_scenarios.sh

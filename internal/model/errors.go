@@ -1,7 +1,5 @@
 package model
 
-import "fmt"
-
 // TransferError represents different types of transfer errors
 type TransferError string
 
@@ -82,14 +80,4 @@ func (e AccountError) HTTPStatus() int {
 	default:
 		return 500 // Internal Server Error
 	}
-}
-
-// ErrorWithContext creates an error with additional context
-func (e TransferError) WithContext(ctx string) error {
-	return fmt.Errorf("%s: %s", string(e), ctx)
-}
-
-// ErrorWithContext creates an error with additional context
-func (e AccountError) WithContext(ctx string) error {
-	return fmt.Errorf("%s: %s", string(e), ctx)
 }
