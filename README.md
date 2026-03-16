@@ -9,8 +9,6 @@ An internal transfers service that exposes HTTP endpoints for:
 All balances and transfers are persisted in PostgreSQL with strong concurrency
 and data integrity guarantees.
 
-This project is an implementation of the specification in `assignment.txt`.
-
 ---
 
 ## 1. Overview & Architecture
@@ -105,7 +103,6 @@ transfersystem/
 ├── test_scenarios.sh            # End-to-end scenario test script
 ├── INSTRUCTIONS.md              # Extended setup + test instructions
 ├── README.md                    # (this file)
-├── assignment.txt               # Original exercise description
 ├── go.mod
 └── go.sum
 ```
